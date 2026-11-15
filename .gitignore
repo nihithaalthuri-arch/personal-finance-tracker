@@ -1,0 +1,8 @@
+.DS_Store
+data/*.csv
+data/backups/
+*.log
+data/*.csv
+data/*.txt
+data/backups/
+.DS_Store

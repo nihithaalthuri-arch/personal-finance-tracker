@@ -1,0 +1,44 @@
+#!/bin/bash
+# Person 1: Transaction operations.
+add_transaction() {
+    local type="$1" category amount description
+    read -r -p 'Category: ' category
+    read -r -p 'Amount (whole INR): ' amount
+    read -r -p 'Description: ' description
+    if save_transaction "$type" "$category" "$amount" "$description"; then
+        printf 'Transaction #%s saved.\n' "$LAST_TRANSACTION_ID"
+    else
+        echo 'Invalid details. Use a positive whole-number amount; no commas or newlines in text.'
+    fi
+}
+
+view_transactions() {
+    printf '\n%-5s %-12s %-8s %-15s %-10s %s\n' ID Date Type Category 'INR' Description
+    awk -F, 'NR > 1 { printf "%-5s %-12s %-8s %-15s %-10s %s\n", $1,$2,$3,$4,$5,$6; n++ }
+             END { if (n==0) print "No transactions yet." }' "$TRANSACTIONS_FILE"
+}
+
+delete_transaction() {
+    local id
+    read -r -p 'Transaction ID to delete: ' id
+    if delete_transaction_record "$id"; then echo 'Deleted.'; else echo 'ID not found or invalid.'; fi
+}
+
+edit_transaction() {    local id type category amount description
+    read -r -p 'Transaction ID to edit: ' id
+    if ! transaction_exists "$id"; then echo 'ID not found.'; return; fi
+    read -r -p 'New type (income/expense): ' type
+    read -r -p 'New category: ' category
+    read -r -p 'New amount (whole INR): ' amount
+    read -r -p 'New description: ' description
+    if update_transaction_record "$id" "$type" "$category" "$amount" "$description"; then
+        echo 'Updated.'
+    else
+        echo 'Invalid details; no changes made.'
+    fi
+}
+
+check_balance() {
+    awk -F, 'NR > 1 { if ($3=="income") income+=$5; else if ($3=="expense") expense+=$5 }
+             END { printf "Income: INR %.0f | Expenses: INR %.0f | Balance: INR %.0f\n", income,expense,income-expense }' "$TRANSACTIONS_FILE"
+}
