@@ -4,7 +4,10 @@ monthly_report() {
     local month="$1"
     if ! validate_month "$month"; then echo 'Enter a valid month (YYYY-MM).'; return 1; fi
     printf '\n===== REPORT FOR %s =====\n' "$month"
-    awk -F, -v m="$month" '
+   echo "Transactions for $month:"
+   grep "^.*,${month}-" "$TRANSACTIONS_FILE" |
+   sed 's/,/ | /g'
+   awk -F, -v m="$month" '
         NR>1 && substr($2,1,7)==m {
             if ($3=="income") income+=$5
             else if ($3=="expense") expenses+=$5
@@ -24,6 +27,30 @@ monthly_report() {
         while [ "$i" -lt "$bars" ]; do chart="${chart}#"; i=$((i + 1)); done
         printf '%-16s %-30s INR %s\n' "$category" "$chart" "$amount"
     done
+    echo
+    echo "Top Spending Category:"
+
+    awk -F, -v m="$month" '
+    NR > 1 && substr($2,1,7)==m && $3=="expense" {
+        category[$4] += $5
+       }
+
+    END {
+        for (c in category) {
+            if (category[c] > max) {
+                max = category[c]
+                highest = c
+            }
+        }
+
+        if (highest == "")
+            print "No expenses recorded."
+        else {
+            print "Category:", highest
+            print "Amount: INR", max
+           }
+      }
+' "$TRANSACTIONS_FILE"
 }
 
 report_menu() {
@@ -32,14 +59,29 @@ report_menu() {
     monthly_report "$month"
 }
 
-export_report() {
+export_monthly_report() {
     local month destination
+
     read -r -p 'Month (YYYY-MM): ' month
-    if ! validate_month "$month"; then echo 'Invalid month.'; return; fi
-    destination="$FINANCE_DATA_DIR/report_${month}.txt"
-    if monthly_report "$month" > "$destination"; then
-        printf 'Report saved to %s\n' "$destination"
-    else
-        echo 'Failed to save report.'
+
+    if ! validate_month "$month"; then
+        echo "Invalid month."
+        return 1
     fi
+
+    mkdir -p "$FINANCE_DATA_DIR"
+
+    destination="$FINANCE_DATA_DIR/report_${month}.txt"
+
+    if monthly_report "$month" > "$destination"; then
+        echo "Report saved to $destination"
+    else
+        echo "Failed to save report."
+        return 1
+    fi
+}
+
+# Compatibility with main.sh
+export_report() {
+    export_monthly_report
 }
