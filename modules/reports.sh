@@ -1,5 +1,12 @@
 #!/bin/bash
+
 # Person 3: Summaries and category charts.
+
+# Validate month format (YYYY-MM)
+validate_month() {
+    [[ "$1" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]]
+}
+
 monthly_report() {
     local month="$1"
     if ! validate_month "$month"; then echo 'Enter a valid month (YYYY-MM).'; return 1; fi
@@ -69,9 +76,9 @@ export_monthly_report() {
         return 1
     fi
 
-    mkdir -p "$FINANCE_DATA_DIR"
+    mkdir -p "$DATA_DIR"
 
-    destination="$FINANCE_DATA_DIR/report_${month}.txt"
+   destination="$DATA_DIR/report_${month}.txt"
 
     if monthly_report "$month" > "$destination"; then
         echo "Report saved to $destination"
