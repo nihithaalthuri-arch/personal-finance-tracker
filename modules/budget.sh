@@ -1,53 +1,65 @@
 #!/bin/bash
-# Person 2: Monthly category budgets.
-calculate_spending() {
-    local month="$1" category="$2"
-    awk -F, -v m="$month" -v c="$category" '
-        NR > 1 && substr($2,1,7)==m && $3=="expense" && $4==c {total+=$5}
-        END {printf "%.0f\n",total}' "$TRANSACTIONS_FILE"
+# ==========================================
+#  BUDGET MANAGEMENT
+# PERSONAL FINANCE TRACKER
+# ==========================================
+# FEATURE 1: Initialize budget storage
+initialize_budgets() {
+    mkdir -p "$(dirname "$BUDGETS_FILE")"
+    if [ ! -f "$BUDGETS_FILE" ]; then
+        echo "month,category,limit" > "$BUDGETS_FILE"
+        echo "Budget file created successfully."
+    fi
 }
-
+# FEATURE 2: Validate month format
+validate_budget_month() {
+    [[ "$1" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]]
+}
+# FEATURE 3: Validate budget amount
+validate_budget_amount() {
+    [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -gt 0 ]
+}
+# FEATURE 4: Set a monthly budget
 set_budget() {
-    local month category limit
-    read -r -p 'Month (YYYY-MM): ' month
-    read -r -p 'Category: ' category
-    read -r -p 'Budget limit (whole INR): ' limit
-    if save_budget_record "$month" "$category" "$limit"; then
-        echo 'Budget saved (previous limit for this month/category replaced).'
-    else
-        echo 'Invalid month, category or amount.'
+    local month category limit temp_file
+    initialize_budgets
+    echo
+    echo "===== SET MONTHLY BUDGET ====="
+    read -r -p "Enter month (YYYY-MM): " month
+    read -r -p "Enter category: " category
+    read -r -p "Enter budget limit (INR): " limit
+    if ! validate_budget_month "$month"; then
+        echo "Invalid month format."
+        return 1
     fi
-}
-
-view_budgets() {
-    local month category limit spent remaining percent
-    printf '\n%-9s %-15s %-9s %-9s %-10s %s\n' Month Category Limit Spent Remaining Status
-    while IFS=, read -r month category limit; do
-        [ "$month" = month ] && continue
-        spent="$(calculate_spending "$month" "$category")"
-        remaining=$((limit - spent))
-        percent=$((spent * 100 / limit))
-        if [ "$spent" -gt "$limit" ]; then
-            status='OVER BUDGET'
-        elif [ "$percent" -ge 80 ]; then
-            status='80%+ USED'
-        else
-            status='OK'
-        fi
-        printf '%-9s %-15s %-9s %-9s %-10s %s\n' "$month" "$category" "$limit" "$spent" "$remaining" "$status"
-    done < "$BUDGETS_FILE"
-}
-
-check_budget() {
-    local month category found
-    read -r -p 'Month (YYYY-MM): ' month
-    read -r -p 'Category: ' category
-    if ! validate_month "$month" || ! validate_text "$category"; then
-        echo 'Invalid month/category.'; return
+    if [ -z "$category" ] || [[ "$category" == *,* ]]; then
+        echo "Invalid category."
+        return 1
     fi
-    found="$(awk -F, -v m="$month" -v c="$category" 'NR>1 && $1==m && $2==c {print $3; exit}' "$BUDGETS_FILE")"
-    if [ -z "$found" ]; then echo 'No budget found.'; return; fi
-    local spent
-    spent="$(calculate_spending "$month" "$category")"
-    printf 'Limit: INR %s | Spent: INR %s | Remaining: INR %s\n' "$found" "$spent" "$((found-spent))"
-}
+    if ! validate_budget_amount "$limit"; then
+        echo "Enter a positive whole-number amount."
+        return 1
+    fi
+    temp_file=$(mktemp "${BUDGETS_FILE}.XXXXXX") || return 1
+    awk -F, -v OFS=, \
+        -v m="$month" \
+        -v c="$category" \
+        -v l="$limit" '
+        NR == 1 {
+            print
+            next
+        }
+        $1 == m && $2 == c {
+            $3 = l
+            found = 1
+        }
+        {
+            print
+        }
+        END {
+            if (!found)
+                print m, c, l
+        }
+    ' "$BUDGETS_FILE" > "$temp_file"
+
+    if [ $? -eq 0 ]; then
